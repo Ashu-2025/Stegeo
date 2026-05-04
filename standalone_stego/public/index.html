@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StegoShare | Invisible Data Protection</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+    <div class="bg-blob"></div>
+    
+    <nav>
+        <div class="container">
+            <div class="logo">
+                <i data-lucide="shield-check"></i>
+                <span>StegoShare</span>
+            </div>
+            <div class="nav-links">
+                <button onclick="switchTab('encode')" id="tab-encode" class="tab-btn active">Encode</button>
+                <button onclick="switchTab('decode')" id="tab-decode" class="tab-btn">Decode</button>
+            </div>
+        </div>
+    </nav>
+
+    <header>
+        <div class="container">
+            <h1>Hide Secrets <span class="gradient-text">Inside Images</span></h1>
+            <p>Secure, encrypted steganography for private communication.</p>
+        </div>
+    </header>
+
+    <main class="container">
+        <section id="encode" class="card">
+            <div class="card-header">
+                <i data-lucide="lock" class="icon-violet"></i>
+                <h2>Encode Message</h2>
+            </div>
+            <form id="encodeForm">
+                <div class="input-group">
+                    <label>Secret Message</label>
+                    <textarea id="message" placeholder="Enter your confidential message..." required></textarea>
+                </div>
+                <div class="input-group">
+                    <label>Security Key (6 chars)</label>
+                    <input type="password" id="password" placeholder="••••••••" minlength="6" maxlength="6" required>
+                </div>
+                <div class="input-group">
+                    <label>Cover Image</label>
+                    <div class="file-upload" id="dropzone">
+                        <i data-lucide="image"></i>
+                        <p>Click or drag image to upload</p>
+                        <input type="file" id="imageInput" accept="image/*" required hidden>
+                    </div>
+                    <div id="previewContainer" class="hidden">
+                        <img id="imagePreview" src="" alt="Preview">
+                    </div>
+                </div>
+                <button type="submit" class="btn-primary" id="encodeBtn">
+                    <i data-lucide="cpu"></i>
+                    Process & Hide
+                </button>
+            </form>
+
+            <div id="resultArea" class="hidden">
+                <div class="divider"></div>
+                <h3>Resulting Image</h3>
+                <img id="resultImage" src="" alt="Encoded result">
+                <div class="btn-group">
+                    <a id="downloadLink" href="#" download="stego-image.png" class="btn-secondary">
+                        <i data-lucide="download"></i>
+                        Download
+                    </a>
+                    <button id="shareBtn" class="btn-violet">
+                        <i data-lucide="share-2"></i>
+                        Share Image
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <section id="decode" class="card hidden">
+            <div class="card-header">
+                <i data-lucide="unlock" class="icon-violet"></i>
+                <h2>Decode Message</h2>
+            </div>
+            <form id="decodeForm">
+                <div class="input-group">
+                    <label>Stego Image</label>
+                    <input type="file" id="decodeImageInput" accept="image/*" required>
+                </div>
+                <div class="input-group">
+                    <label>Decryption Key</label>
+                    <input type="password" id="decodePassword" placeholder="••••••••" minlength="6" maxlength="6" required>
+                </div>
+                <button type="submit" class="btn-primary" id="decodeBtn">
+                    <i data-lucide="key"></i>
+                    Extract Message
+                </button>
+            </form>
+            <div id="decodedResult" class="hidden">
+                <div class="divider"></div>
+                <h3>Decoded Message:</h3>
+                <div class="message-box" id="messageOutput"></div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>© 2026 StegoShare. All rights reserved.</p>
+    </footer>
+
+    <script src="script.js"></script>
+    <script>lucide.createIcons();</script>
+</body>
+</html>
