@@ -1,25 +1,55 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Lock, User, ArrowRight } from "lucide-react";
+import bigLogo from "../assets/big_logo.png";
+
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:4002";
 
 function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    // Dummy login logic: admin / Adm1n!
-    if (username === "admin" && password === "Adm1n!") {
-      navigate("/admin");
-    } else {
-      navigate("/app"); // Default goes to the project site
+    try {
+      const response = await fetch(`${API_BASE}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identifier: username, password }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("user", JSON.stringify(data.user));
+        
+        if (data.user.role === "admin") {
+          navigate("/admin");
+        } else {
+          navigate("/dashboard");
+        }
+      } else {
+        alert(data.error || "Login failed");
+      }
+    } catch (err) {
+      alert("Error connecting to server");
     }
   };
 
   return (
-    <div className="relative z-10 flex min-h-[80vh] items-center justify-center px-4">
-      <div className="glass-panel neon-ring w-full max-w-md rounded-2xl p-8 fade-in-up">
+    <div className="relative z-10 flex min-h-screen flex-col items-center justify-center px-4">
+      <div className="mb-8 flex flex-col items-center justify-center fade-in-up">
+        <div className="relative">
+          <div className="absolute -inset-4 rounded-full bg-violet-500/20 blur-2xl"></div>
+          <img 
+            src={bigLogo} 
+            alt="StegoShield Logo" 
+            className="relative h-32 w-32 object-contain drop-shadow-[0_0_15px_rgba(124,58,237,0.3)]" 
+          />
+        </div>
+      </div>
+
+      <div className="glass-panel neon-ring w-full max-w-md rounded-2xl p-8 fade-in-up delay-1">
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold tracking-tight text-black">
             Stego Shield
@@ -44,7 +74,7 @@ function LoginPage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="w-full rounded-xl border border-violet-200 bg-white/60 p-3 pl-10 text-sm text-black placeholder-gray-400 shadow-inner outline-none transition-all focus:border-violet-400/50 focus:bg-white focus:ring-1 focus:ring-violet-400/50"
-                placeholder="Enter username (admin for dashboard)"
+                placeholder="Enter username or email"
                 required
               />
             </div>
@@ -66,9 +96,9 @@ function LoginPage() {
                 className="w-full rounded-xl border border-violet-200 bg-white/60 p-3 pl-10 text-sm text-black placeholder-gray-400 shadow-inner outline-none transition-all focus:border-violet-400/50 focus:bg-white focus:ring-1 focus:ring-violet-400/50"
                 placeholder="••••••••"
                 minLength={6}
-                maxLength={6}
-                pattern="(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&]).{6}"
-                title="Must be 6 characters including at least one letter, one number, and one symbol (@$!%*#?&)"
+                maxLength={32}
+                pattern="(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&]).{6,}"
+                title="Must be at least 6 characters including at least one letter, one number, and one symbol (@$!%*#?&)"
                 required
               />
             </div>

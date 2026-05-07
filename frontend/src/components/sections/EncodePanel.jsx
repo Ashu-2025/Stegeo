@@ -35,10 +35,14 @@ function EncodePanel() {
 
     try {
       // 1. Hide/Encode message in image
+      const userStr = localStorage.getItem("user");
+      const user = userStr ? JSON.parse(userStr) : null;
+      
       const formData = new FormData();
       formData.append("image", selectedFile);
       formData.append("message", message);
       formData.append("password", password);
+      if (user) formData.append("username", user.username);
 
       const hideRes = await fetch(`${API_BASE}/hide`, {
         method: "POST",

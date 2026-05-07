@@ -1,6 +1,7 @@
 import { Menu, Shield, X, User, LogOut } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import adminLogo from "../../assets/admin_logo.png";
 
 const navItems = [
   { href: "#about", label: "About", isAnchor: true },
@@ -14,18 +15,21 @@ function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();
   const isHomePage = location.pathname === "/app";
-  const isLoggedIn = ["/app", "/admin", "/encode", "/decode"].includes(location.pathname);
+  const userStr = localStorage.getItem("user");
+  const user = userStr ? JSON.parse(userStr) : null;
+  const isLoggedIn = !!localStorage.getItem("token");
 
   const handleLogout = () => {
+    localStorage.clear();
     navigate("/");
   };
 
   return (
     <header className="sticky top-0 z-30 border-b border-[#4c1d95]/20 bg-[#4c1d95] backdrop-blur-xl">
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 lg:px-8">
-        <Link to={isLoggedIn ? "/app" : "/"} className="flex items-center gap-3 text-white">
-          <div className="rounded-2xl border border-cyan-300/20 bg-cyan-400/10 p-2 text-cyan-300">
-            <Shield className="h-5 w-5" />
+        <Link to={isLoggedIn ? (user?.role === "admin" ? "/admin" : "/dashboard") : "/"} className="flex items-center gap-3 text-white">
+          <div className="h-10 w-10 overflow-hidden rounded-xl border border-cyan-300/20 bg-white p-1">
+            <img src={adminLogo} alt="Logo" className="h-full w-full object-contain" />
           </div>
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.28em] text-cyan-300/80">
@@ -55,6 +59,14 @@ function Navbar() {
               </Link>
             )
           ))}
+          {isLoggedIn && (
+            <Link
+              to={user?.role === "admin" ? "/admin" : "/dashboard"}
+              className="text-sm font-semibold text-cyan-300 transition hover:text-cyan-200"
+            >
+              {user?.role === "admin" ? "Admin Panel" : "Dashboard"}
+            </Link>
+          )}
           {isLoggedIn ? (
             <button
               onClick={handleLogout}
@@ -107,8 +119,18 @@ function Navbar() {
                 >
                   {item.label}
                 </Link>
-              )
-            ))}
+                )
+              ))
+            }
+            {isLoggedIn && (
+              <Link
+                to={user?.role === "admin" ? "/admin" : "/dashboard"}
+                className="text-sm font-semibold text-cyan-300 transition hover:text-cyan-200"
+                onClick={() => setIsOpen(false)}
+              >
+                {user?.role === "admin" ? "Admin Panel" : "Dashboard"}
+              </Link>
+            )}
             {isLoggedIn ? (
               <button
                 onClick={() => {

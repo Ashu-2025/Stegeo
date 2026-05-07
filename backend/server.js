@@ -6,11 +6,15 @@ const path = require("path");
 const crypto = require("crypto");
 const Jimp = require("jimp");
 const fernet = require("fernet");
-const portfinder = require("portfinder");
 const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const sharp = require("sharp");
+const db = require("./db");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 require("dotenv").config({ path: path.join(__dirname, ".env") });
+
+console.log("✅ Using Local JSON Database (database.json)");
 
 const app = express();
 
@@ -43,6 +47,99 @@ app.use("/uploads", express.static(uploadsDir));
 
 app.get("/", (req, res) => {
     res.json({ status: "online", message: "StegoShield Secure API" });
+});
+
+// --- AUTH ROUTES ---
+
+app.post("/register", async (req, res) => {
+    try {
+        const { username, email, password } = req.body;
+        if (!username || !email || !password) return res.status(400).json({ error: "Missing fields" });
+
+        const existingUser = db.findUser(u => u.email === email || u.username === username);
+        if (existingUser) return res.status(400).json({ error: "User already exists" });
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        db.addUser({ username, email, password: hashedPassword, role: "user" });
+
+        db.addActivity({ event: "New User Registered", user: username, status: "Success" });
+
+        res.json({ message: "Registration successful" });
+    } catch (err) {
+        res.status(500).json({ error: "Registration failed: " + err.message });
+    }
+});
+
+app.post("/login", async (req, res) => {
+    try {
+        const { identifier, password } = req.body;
+        const user = db.findUser(u => u.email === identifier || u.username === identifier);
+        
+        if (!user) return res.status(400).json({ error: "Invalid credentials" });
+
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) {
+            db.addActivity({ event: "Login Attempt", user: identifier, status: "Failed" });
+            return res.status(400).json({ error: "Invalid credentials" });
+        }
+
+        const token = jwt.sign({ id: user.username, role: user.role }, process.env.JWT_SECRET || "secret", { expiresIn: "1d" });
+        db.addActivity({ event: "User Login", user: user.username, status: "Success" });
+
+        res.json({ token, user: { username: user.username, role: user.role } });
+    } catch (err) {
+        res.status(500).json({ error: "Login failed" });
+    }
+});
+
+// --- ADMIN ROUTES ---
+
+app.get("/api/admin/stats", async (req, res) => {
+    try {
+        const users = db.getUsers().map(u => ({ username: u.username, email: u.email, role: u.role }));
+        const totalUsers = users.length;
+        const imagesEncoded = db.countActivity(a => a.event === "Image Encoded" && a.status === "Success");
+        const failedAttempts = db.countActivity(a => a.status === "Failed");
+        const recentActivity = db.getRecentActivity(10);
+
+        res.json({
+            users,
+            totalUsers,
+            imagesEncoded,
+            failedAttempts,
+            recentActivity: recentActivity.map(a => ({
+                event: a.event,
+                user: a.user,
+                status: a.status,
+                time: a.timestamp
+            }))
+        });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to fetch stats" });
+    }
+});
+
+app.get("/api/user/stats", async (req, res) => {
+    try {
+        const { username } = req.query;
+        if (!username) return res.status(400).json({ error: "Username required" });
+
+        const totalUsers = db.countUsers();
+        const imagesEncoded = db.countActivity(a => a.event === "Image Encoded" && a.user === username && a.status === "Success");
+        const recentActivity = db.getRecentActivity(10, a => a.user === username);
+
+        res.json({
+            totalUsers,
+            imagesEncoded,
+            recentActivity: recentActivity.map(a => ({
+                event: a.event,
+                status: a.status,
+                time: a.timestamp
+            }))
+        });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to fetch user stats" });
+    }
 });
 
 // 1. HIDE MESSAGE (LSB Steganography + AES)
@@ -106,6 +203,10 @@ app.post("/hide", upload.single("image"), async (req, res) => {
         const outputPath = path.join(uploadsDir, `stego-${Date.now()}.png`);
 
         await image.write(outputPath);
+
+        // Log Activity
+        const username = req.body.username || "Anonymous";
+        db.addActivity({ event: "Image Encoded", user: username, status: "Success" });
 
         try {
             if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
@@ -192,11 +293,16 @@ app.post("/extract", upload.single("image"), async (req, res) => {
         });
 
         const decryptedMessage = token.decode();
-        if (!decryptedMessage) return res.status(400).json({ error: "Invalid password or corrupted data." });
+        if (!decryptedMessage) {
+            db.addActivity({ event: "Extraction Attempt", user: "Anonymous", status: "Failed" });
+            return res.status(400).json({ error: "Invalid password or corrupted data." });
+        }
 
+        db.addActivity({ event: "Image Decoded", user: "Anonymous", status: "Success" });
         res.json({ message: decryptedMessage });
     } catch (err) {
         console.error(err);
+        db.addActivity({ event: "Extraction Error", user: "Anonymous", status: "Failed" });
         try {
             if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
         } catch (e) { }
@@ -236,9 +342,11 @@ app.post("/share", async (req, res) => {
             Key: uploadParams.Key,
         }), { expiresIn: 3600 * 24 }); // 24 hours
 
+        db.addActivity({ event: "Link Shared", user: "Anonymous", status: "Success" });
         res.json({ shareLink: presignedUrl });
     } catch (err) {
         console.error(err);
+        db.addActivity({ event: "Sharing Error", user: "Anonymous", status: "Failed" });
         res.status(500).json({ error: "Cloud sharing failed" });
     }
 });

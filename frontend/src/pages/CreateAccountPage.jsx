@@ -2,17 +2,32 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Lock, User, Mail, ArrowRight } from "lucide-react";
 
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:4002";
+
 function CreateAccountPage() {
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
 
-  const handleRegister = (e) => {
+  const handleRegister = async (e) => {
     e.preventDefault();
-    // Dummy registration logic
-    // After creating an account, redirect to login or directly to the app
-    navigate("/");
+    try {
+      const response = await fetch(`${API_BASE}/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, email, password }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        alert("Registration successful! Please login.");
+        navigate("/");
+      } else {
+        alert(data.error || "Registration failed");
+      }
+    } catch (err) {
+      alert("Error connecting to server");
+    }
   };
 
   return (
@@ -84,9 +99,9 @@ function CreateAccountPage() {
                 className="w-full rounded-xl border border-violet-200 bg-white/60 p-3 pl-10 text-sm text-black placeholder-gray-400 shadow-inner outline-none transition-all focus:border-violet-400/50 focus:bg-white focus:ring-1 focus:ring-violet-400/50"
                 placeholder="••••••••"
                 minLength={6}
-                maxLength={6}
-                pattern="(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&]).{6}"
-                title="Must be 6 characters including at least one letter, one number, and one symbol (@$!%*#?&)"
+                maxLength={32}
+                pattern="(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&]).{6,}"
+                title="Must be at least 6 characters including at least one letter, one number, and one symbol (@$!%*#?&)"
                 required
               />
             </div>

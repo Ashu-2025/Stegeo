@@ -4,6 +4,7 @@ import LoginPage from "./pages/LoginPage";
 import AdminPage from "./pages/AdminPage";
 import CreateAccountPage from "./pages/CreateAccountPage";
 import EncodePage from "./pages/EncodePage";
+import UserDashboard from "./pages/UserDashboard";
 import DecodePage from "./pages/DecodePage";
 
 function App() {
@@ -23,6 +24,7 @@ function App() {
           
           {/* Main project website after login */}
           <Route path="/app" element={<HomePage />} />
+          <Route path="/dashboard" element={<UserDashboard />} />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/encode" element={<EncodePage />} />
           <Route path="/decode" element={<DecodePage />} />
