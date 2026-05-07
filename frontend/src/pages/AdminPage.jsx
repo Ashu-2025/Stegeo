@@ -15,6 +15,15 @@ export default function AdminPage() {
     recentActivity: []
   });
 
+  const fetchStats = () => {
+    fetch(`${API_BASE}/api/admin/stats`)
+      .then(res => res.json())
+      .then(stats => {
+        setData(stats);
+      })
+      .catch(err => console.error("Error fetching stats:", err));
+  };
+
   useEffect(() => {
     const userStr = localStorage.getItem("user");
     const user = userStr ? JSON.parse(userStr) : null;
@@ -25,13 +34,31 @@ export default function AdminPage() {
       return;
     }
 
-    fetch(`${API_BASE}/api/admin/stats`)
-      .then(res => res.json())
-      .then(stats => {
-        setData(stats);
-      })
-      .catch(err => console.error("Error fetching stats:", err));
+    fetchStats();
   }, [navigate]);
+
+  const handleDelete = async (username) => {
+    if (!window.confirm(`Are you sure you want to delete ${username}?`)) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/users/${username}`, { method: "DELETE" });
+      if (res.ok) fetchStats();
+    } catch (err) {
+      alert("Failed to delete user");
+    }
+  };
+
+  const handleRoleChange = async (username, newRole) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/users/${username}/role`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: newRole }),
+      });
+      if (res.ok) fetchStats();
+    } catch (err) {
+      alert("Failed to update role");
+    }
+  };
 
   const handleLogout = () => {
     localStorage.clear();
@@ -165,13 +192,31 @@ export default function AdminPage() {
                         </span>
                       </td>
 
-                      <td>
-                        <button className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-1 text-xs font-bold rounded-xl transition-all">
-                          Manage
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        {user.username !== 'admin' && (
+                          <>
+                            <button 
+                              onClick={() => handleRoleChange(user.username, user.role === 'admin' ? 'user' : 'admin')}
+                              className="text-xs font-bold text-violet-600 hover:underline"
+                            >
+                              {user.role === 'admin' ? 'Demote' : 'Make Admin'}
+                            </button>
+                            <button 
+                              onClick={() => handleDelete(user.username)}
+                              className="text-xs font-bold text-rose-600 hover:underline"
+                            >
+                              Delete
+                            </button>
+                          </>
+                        )}
+                        {user.username === 'admin' && (
+                          <span className="text-xs text-gray-400 italic">Master Account</span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
                   {data.users.length === 0 && (
                     <tr>
                       <td colSpan="4" className="py-10 text-center text-gray-400">No users found in database.</td>

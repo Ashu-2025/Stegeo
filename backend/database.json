@@ -1,0 +1,30 @@
+{
+  "users": [
+    {
+      "username": "test",
+      "email": "test@test.com",
+      "password": "$2b$10$llAVe6iCJ5lrnDeGI7S5PuPJ9LbzUNGo6m38xWBNusWbSiVT16C0y",
+      "role": "user"
+    },
+    {
+      "username": "admin",
+      "email": "admin@stegoshield.com",
+      "password": "$2b$10$.y8CQNverwgrkZ/sYFtJzud8IalPyVwrl3JWMQJeRUUT8fzSH8dvi",
+      "role": "admin"
+    }
+  ],
+  "activity": [
+    {
+      "event": "New User Registered",
+      "user": "test",
+      "status": "Success",
+      "timestamp": "2026-05-07T18:05:01.051Z"
+    },
+    {
+      "event": "User Login",
+      "user": "test",
+      "status": "Success",
+      "timestamp": "2026-05-07T18:05:08.626Z"
+    }
+  ]
+}

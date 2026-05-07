@@ -9,10 +9,25 @@ const fernet = require("fernet");
 const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const sharp = require("sharp");
-const db = require("./db");
+const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const User = require("./models/User");
+const Activity = require("./models/Activity");
 require("dotenv").config({ path: path.join(__dirname, ".env") });
+
+// Database Connection
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/stegoshield";
+
+const connectDB = async () => {
+    try {
+        await mongoose.connect(MONGODB_URI);
+        console.log("✅ Database Connected Successfully!");
+    } catch (err) {
+        console.error("❌ Database connection error:", err.message);
+    }
+};
+connectDB();
 
 console.log("✅ Using Local JSON Database (database.json)");
 
@@ -56,13 +71,14 @@ app.post("/register", async (req, res) => {
         const { username, email, password } = req.body;
         if (!username || !email || !password) return res.status(400).json({ error: "Missing fields" });
 
-        const existingUser = db.findUser(u => u.email === email || u.username === username);
+        const existingUser = await User.findOne({ $or: [{ email }, { username }] });
         if (existingUser) return res.status(400).json({ error: "User already exists" });
 
         const hashedPassword = await bcrypt.hash(password, 10);
-        db.addUser({ username, email, password: hashedPassword, role: "user" });
+        const newUser = new User({ username, email, password: hashedPassword, role: "user" });
+        await newUser.save();
 
-        db.addActivity({ event: "New User Registered", user: username, status: "Success" });
+        await new Activity({ event: "New User Registered", user: username, status: "Success" }).save();
 
         res.json({ message: "Registration successful" });
     } catch (err) {
@@ -73,18 +89,18 @@ app.post("/register", async (req, res) => {
 app.post("/login", async (req, res) => {
     try {
         const { identifier, password } = req.body;
-        const user = db.findUser(u => u.email === identifier || u.username === identifier);
+        const user = await User.findOne({ $or: [{ email: identifier }, { username: identifier }] });
         
         if (!user) return res.status(400).json({ error: "Invalid credentials" });
 
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
-            db.addActivity({ event: "Login Attempt", user: identifier, status: "Failed" });
+            await new Activity({ event: "Login Attempt", user: identifier, status: "Failed" }).save();
             return res.status(400).json({ error: "Invalid credentials" });
         }
 
         const token = jwt.sign({ id: user.username, role: user.role }, process.env.JWT_SECRET || "secret", { expiresIn: "1d" });
-        db.addActivity({ event: "User Login", user: user.username, status: "Success" });
+        await new Activity({ event: "User Login", user: user.username, status: "Success" }).save();
 
         res.json({ token, user: { username: user.username, role: user.role } });
     } catch (err) {
@@ -96,11 +112,11 @@ app.post("/login", async (req, res) => {
 
 app.get("/api/admin/stats", async (req, res) => {
     try {
-        const users = db.getUsers().map(u => ({ username: u.username, email: u.email, role: u.role }));
+        const users = await User.find({}, 'username email role');
         const totalUsers = users.length;
-        const imagesEncoded = db.countActivity(a => a.event === "Image Encoded" && a.status === "Success");
-        const failedAttempts = db.countActivity(a => a.status === "Failed");
-        const recentActivity = db.getRecentActivity(10);
+        const imagesEncoded = await Activity.countDocuments({ event: "Image Encoded", status: "Success" });
+        const failedAttempts = await Activity.countDocuments({ status: "Failed" });
+        const recentActivity = await Activity.find().sort({ timestamp: -1 }).limit(10);
 
         res.json({
             users,
@@ -124,9 +140,9 @@ app.get("/api/user/stats", async (req, res) => {
         const { username } = req.query;
         if (!username) return res.status(400).json({ error: "Username required" });
 
-        const totalUsers = db.countUsers();
-        const imagesEncoded = db.countActivity(a => a.event === "Image Encoded" && a.user === username && a.status === "Success");
-        const recentActivity = db.getRecentActivity(10, a => a.user === username);
+        const totalUsers = await User.countDocuments();
+        const imagesEncoded = await Activity.countDocuments({ event: "Image Encoded", user: username, status: "Success" });
+        const recentActivity = await Activity.find({ user: username }).sort({ timestamp: -1 }).limit(10);
 
         res.json({
             totalUsers,
@@ -139,6 +155,33 @@ app.get("/api/user/stats", async (req, res) => {
         });
     } catch (err) {
         res.status(500).json({ error: "Failed to fetch user stats" });
+    }
+});
+
+// Delete User (Admin Only)
+app.delete("/api/admin/users/:username", async (req, res) => {
+    try {
+        const { username } = req.params;
+        if (username === "admin") return res.status(400).json({ error: "Cannot delete master admin" });
+        
+        await User.findOneAndDelete({ username });
+        res.json({ message: "User deleted successfully" });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to delete user" });
+    }
+});
+
+// Change User Role (Admin Only)
+app.patch("/api/admin/users/:username/role", async (req, res) => {
+    try {
+        const { username } = req.params;
+        const { role } = req.body;
+        if (username === "admin") return res.status(400).json({ error: "Cannot change master admin role" });
+        
+        await User.findOneAndUpdate({ username }, { role });
+        res.json({ message: "User role updated" });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to update role" });
     }
 });
 
@@ -206,7 +249,7 @@ app.post("/hide", upload.single("image"), async (req, res) => {
 
         // Log Activity
         const username = req.body.username || "Anonymous";
-        db.addActivity({ event: "Image Encoded", user: username, status: "Success" });
+        await new Activity({ event: "Image Encoded", user: username, status: "Success" }).save();
 
         try {
             if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
@@ -294,15 +337,15 @@ app.post("/extract", upload.single("image"), async (req, res) => {
 
         const decryptedMessage = token.decode();
         if (!decryptedMessage) {
-            db.addActivity({ event: "Extraction Attempt", user: "Anonymous", status: "Failed" });
+            await new Activity({ event: "Extraction Attempt", user: "Anonymous", status: "Failed" }).save();
             return res.status(400).json({ error: "Invalid password or corrupted data." });
         }
 
-        db.addActivity({ event: "Image Decoded", user: "Anonymous", status: "Success" });
+        await new Activity({ event: "Image Decoded", user: "Anonymous", status: "Success" }).save();
         res.json({ message: decryptedMessage });
     } catch (err) {
         console.error(err);
-        db.addActivity({ event: "Extraction Error", user: "Anonymous", status: "Failed" });
+        await new Activity({ event: "Extraction Error", user: "Anonymous", status: "Failed" }).save();
         try {
             if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
         } catch (e) { }
@@ -342,11 +385,11 @@ app.post("/share", async (req, res) => {
             Key: uploadParams.Key,
         }), { expiresIn: 3600 * 24 }); // 24 hours
 
-        db.addActivity({ event: "Link Shared", user: "Anonymous", status: "Success" });
+        await new Activity({ event: "Link Shared", user: "Anonymous", status: "Success" }).save();
         res.json({ shareLink: presignedUrl });
     } catch (err) {
         console.error(err);
-        db.addActivity({ event: "Sharing Error", user: "Anonymous", status: "Failed" });
+        await new Activity({ event: "Sharing Error", user: "Anonymous", status: "Failed" }).save();
         res.status(500).json({ error: "Cloud sharing failed" });
     }
 });
@@ -385,7 +428,7 @@ app.use((err, req, res, next) => {
     res.status(500).json({ error: "Internal Server Error", details: err.message });
 });
 
-// Start Server
-app.listen(4002, "0.0.0.0", () => {
-    console.log("Server running on port 4002");
+const PORT = process.env.PORT || 4002;
+app.listen(PORT, "0.0.0.0", () => {
+    console.log(`🚀 Server running on port ${PORT}`);
 });
